@@ -1,0 +1,342 @@
+---
+title: "<b>LOD</b><i> données ouvertes </i><span style='font-size: 30px;'> <br> Science et Données ouvertes en archéologie"
+bibliography: "D:/DocumentationArcheo/biblio12.bib"
+output: 
+  html_document:
+    highlight: tango
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+---
+
+```{r, echo=FALSE}
+url.root <- "https://raw.githubusercontent.com/zoometh/thomashuet/main/img/"
+htmltools::img(src = paste0(url.root, "prj_lod.png"), 
+               alt = 'logo', 
+               width = '150px',
+               style = 'position:absolute; top:0; right:0; padding:10px;')
+```
+
+
+<style>
+.html-widget {
+margin: auto;
+}
+</style>
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(echo = FALSE, fig.width = 19, fig.height = 14)
+library(kableExtra) 
+library(dplyr)
+library(knitr)
+library(shiny)
+library(visNetwork)
+library(stringi)
+library(rdflib)
+library(openxlsx)
+library(rgdal)
+library(rgeos)
+library(dismo)
+library(deldir)
+library(sp)
+library(maptools)
+library(sf)
+library(raster)
+library(leaflet)
+
+text.size <- 15
+
+base <- "https://github.com/zoometh/golasecca/tree/main/"
+inst.logo.root <- "https://raw.githubusercontent.com/zoometh/golasecca/main/LOD/www/inst/"
+# load(file=paste0(base,"df_per_count.RData"))
+# getwd()
+# load("LOD/df_per_count.RData")
+```
+
+La nécessité de l'intéropérabilité des données de la recherche (*linked open data*, LOD) est la conséquence directe de la révolution numérique. Grace au web, aujourd'hui plus que hier, la [science ouverte](#openscience) est réalisable. Ces données représentent les fondements des raisonnements scientifiques qui sont publiés dans les revues scientifiques, les actes de colloque, etc. Leur évolution, leur hétérogénéité et leur volume nécessitent d'établir un plan pour leur [gestion](#pgd). Au niveau français, et pour les sciences humaines, l'infrastructure [Huma-Num](#humanum) offre des ressources et un cadre formel. 
+
+# Science ouverte {#openscience}
+
+"*La science ouverte consiste à rendre accessible autant que possible et fermé autant que nécessaire*"  [@ScienceOuverte]. Basée sur l'ouverture de données (*open data*) décrites sémantiquement (thésaurus, iso-standards, etc.) et des métadonnées (*metadata*), la science ouvert (*Open Science*) repose sur les principes du FAIR
+
+```{r faire, echo=F}
+fair <- data.frame(nom = c("**F**acile à trouver",
+                           "**A**ccessible",
+                           "**I**nteropérable",
+                           "**R**éutilisable"),
+                   name = c("***F**indable*",
+                            "***A**ccessible*",
+                            "***I**nteroperable*",
+                            "***R**eusable*"),
+                   url = c("#FFAIR",
+                           "#FAAIR",
+                           "#FAIIR",
+                           "#FAIRR"),
+                   stringsAsFactors = F)
+fair$fair <- paste0("[",fair$nom,"](",fair$url,")")
+kable(fair$fair,"html", row.names = F, col.names = NULL) %>%
+  kable_styling(full_width = FALSE, position = "center", font_size=12)
+```
+
+## **F**acile à trouver {#FFAIR}
+
+Repose sur l'attribution d'identifiants uniques (DOI) et un système standardisé de citations, comme les boutons "Citer" ou les liens qui affichent des les principaux formats de références biblographiques (.bib, .tex, etc.). Comme pour citer la page web [Golasecca-net](https://zoometh.github.io/golasecca) et l'article ayant servis à développer cette page:
+
+<center>[https://raw.githubusercontent.com/zoometh/golasecca/main/bibliographie.bib](https://raw.githubusercontent.com/zoometh/golasecca/main/bibliographie.bib)</center>
+
+## **A**ccessible {#FAAIR}
+
+L'ouverture des données (*open data*) est à la base de la Science Ouverte, ces données seront  accompagnées de métadonnées et recevront une certification
+
+## **I**ntéroperable {#FAIIR}
+
+Les données seront intégrées à d'autres. Elles doivent donc être exprimées dans des formats ouverts et internationaux. C'est par exemple le cas du format WKT qui est le format standard, *human-readable*, pour la représentation des données géographiques.
+
+
+## **R**éusable {#FAIRR}
+
+La provenance, le nom du laboratoire, les méthodes et les équipements utilisés seront sourcés et sous license. 
+
+```{r licences, echo=F}
+licences <- c("ODbL")
+description <- c("bases de données ouvertes")
+df.licences <- data.frame(licences = licences,
+                          description = description,
+                          stringsAsFactors = F)
+kable(df.licences,"html", row.names = F,
+      caption = "Exemples de licences utilisées dans le projet") %>%
+  kable_styling(full_width = FALSE, position = "center", font_size=12)
+```
+
+Les données ouvertes seront connectées au web sémantique (*linked open data*, LOD). Ces données décrites comme des triples structurés sous la forme: sujet-prédicat-objet, au format *Resource Description Framework* (RDF) et enregistrées selon la syntaxe *JavaScript Object Notation for Linked Data* (JSON-LD). 
+
+Par exemple pour le site d'Uto-Kulm (n° 247) durant la phase [Golasecca IIAB-IIIA1](https://zoometh.github.io/golasecca/#Golasecca_IIAB-IIIA1):
+
+```{r ex, echo=T}
+site <- "Uto-Kulm"
+per <- "GIIAB_IIIA1_530_450"
+urlfile<-'https://raw.github.com/zoometh/golasecca/master/LOD/data/data_temp.csv'
+df <- read.csv(urlfile)
+df.select <- df[df[ , "Lieu_dit"] == site & df[ , per] > 0, ]
+df.per.count <- df.select %>% count(Objet)
+df.per.count$Site <- site
+kable(df.per.count,"html",
+      row.names = F,
+      caption = "Nombre des différents types d'objets pour 
+le site d'Uto-Kulm au Golasecca IIAB-IIIA1") %>%
+  collapse_rows() %>%
+  kable_styling(full_width = FALSE,
+                position = "center",
+                font_size=12)
+```
+
+Où:
+
+* **Site** = sujet
+* **Objet** = prédicat
+* **n** = objet
+
+Le langage de programmation R,  offre différents *packages* ([rdflib](https://cran.r-project.org/web/packages/rdflib/vignettes/rdf_intro.html), [jsonld](https://cran.r-project.org/web/packages/jsonld/index.html), etc.) permettant de formater les données de l'étude sous la forme de LOD: 
+
+```{r rdf, echo=TRUE}
+rdf <- rdf()
+for (i in 1:nrow(df.per.count)){
+  rdf %>% 
+    rdf_add(subject = paste0(base, df.per.count[i,"Site"]), 
+            predicate = paste0(base, df.per.count[i,"Objet"]), 
+            object = df.per.count[i,"n"]) 
+}
+rdf
+```
+
+Le triple peut être sérialisé sous le format JSON-LD, actuellement le plus populaire pour décrire des données web et qui sera bientôt intégré par Google. 
+
+```{r json, echo=TRUE}
+json.name <- paste0(getwd(), site, "_", per,".json")
+rdf_serialize(rdf, json.name, "jsonld") 
+```
+
+
+Ce fichier peut ensuite être déposé sur GitHub :
+
+<center>
+
+[https://raw.githubusercontent.com/zoometh/golasecca/main/LOD/Uto-Kulm_GIIAB_IIIA1.json](https://raw.githubusercontent.com/zoometh/golasecca/main/LOD/Uto-Kulm_GIIAB_IIIA1.json)
+
+</center>
+
+# Plan de gestion des données {#pgd}
+
+Le plan de gestion des données (PGD, *data management plan*)  peut suivre les recommandations européennes H2020 pour la science ouverte et la gestion ouverte des données de recherche
+
+```{r dmp, echo=F, fig.align='center', fig.height= 7, fig.width= 7, fig.cap="Plan de gestion des données du projet ITINERIS"}
+dmg.steps <- c("collecte", 
+               "description",
+               "stockage",
+               "analyses",
+               "archivage",
+               "publication")
+dmg.steps.url <- c("#wp3.step.collec",
+                   "#wp3.step.describ",
+                   "#wp3.bdweb",
+                   "#wp3.step.anal",
+                   "#wp3.step.archiv",
+                   "#wp3.step.public")
+dmg.steps.tit <- paste0("<a href='",dmg.steps.url,"'>",dmg.steps,"</a>")
+dmp.logo.root <- "https://raw.githubusercontent.com/zoometh/golasecca/main/LOD/www/dmp/"
+name.im <- c(paste0(dmp.logo.root, "data_create.png"),
+             paste0(dmp.logo.root, "data_tag.png"),
+             paste0(dmp.logo.root, "data_store.png"),
+             paste0(dmp.logo.root, "data_process.png"),
+             paste0(dmp.logo.root, "data_archive.png"),
+             paste0(dmp.logo.root, "data_publish.png"))
+n.dmg.steps <- length(dmg.steps)
+nodes <- data.frame(id=dmg.steps,
+                    label = dmg.steps,
+                    # label = paste0("[",dmg.steps,"](",dmg.steps.url,")"),
+                    color = c(rep("#808080", n.dmg.steps)),
+                    title = dmg.steps.tit,
+                    font.size = rep(15, n.dmg.steps),
+                    font.color = c(rep("black", n.dmg.steps)),
+                    image = name.im,
+                    shape = c(rep("image", n.dmg.steps)),
+                    size = c(rep(24, n.dmg.steps)),
+                    group = c(rep("dmp", n.dmg.steps))
+)
+a <- data.frame(from = dmg.steps[1:length(dmg.steps)-1],
+                to = dmg.steps[2:length(dmg.steps)])
+b <- data.frame(from = dmg.steps[length(dmg.steps)],
+                to = dmg.steps[1])
+edges <- rbind(a,b)
+visNetwork(nodes, edges, 
+           width = "500px", height = "500px") %>%
+  visEdges(shadow = TRUE,
+           smooth = TRUE,
+           arrows =list(to = list(enabled = TRUE, 
+                                  scaleFactor = 1)),
+           color = list(color = "lightblue", highlight = "red"))
+```
+
+
+### Collecte {#wp3.step.collec}
+
+L'ensemble des données produites ou réutilisées
+
+
+### Description {#wp3.step.describ}
+
+Les données sont décrites selon les ISO-standards, des thésaurus (i.e., vocabulaires contrôlés, *shared vocabularies*) déjà existants et par de nouveaux thésaurus
+
+Si la nature des données historico-culturelles (sites archéologiques, contextes stratigraphiques, types des objets, etc.) le permet, celles-ci seront alignées avec les champs et les valeurs du *Cultural Heritage Information-Conceptual Reference Model* (CIDOC-CRM), un iso-standard ([21127:2006](https://www.iso.org/standard/34424.html)) pour la description et l’organisation de l’information liée au patrimoine archéologique et architectural. Dans l'autre cas, le projet produira un thésaurus qui sera [FAIRisé](#openscience).
+
+### Stockage {#wp3.step.stock}
+
+Le stockage des données se fera généralement sur une base de données (BD) consultable en ligne via un navigateur web. Cette BD peut être hébergée sur les serveurs d’Huma-Num et référencée sur la grille Huma-Num.
+
+<center>
+
+![Capture d'écran des données liée la BaseFer sur le visualisateur BD/SIG (MySQL/GeoServer) Chronocarto, développé par AOROC et l'entreprise Géocarta](https://raw.githubusercontent.com/zoometh/golasecca/main/LOD/www/basefer.png){width=450px}
+
+</center>
+
+La base de données, peut être rendue interopérable avec les langages de programmation (R, Python, etc.). Pour faciliter leur gestion et leur intéropérabilité, données et métadonnées doivent souvent être retranscrites à la volée par des routines informatiques et selon les formats ouverts et internationaux:
+
+```{r databases, echo=F}
+base.iso.url <- "https://www.iso.org/fr/"
+description <- c("Représenter/publier les données",
+                 "Représenter/publier les données",
+                 "Décrire les données à partir de vocabulaires",
+                 "Historique des données",
+                 "Historique des données",
+                 "Historique des données",
+                 "Recherche de données")
+format <- c("JSON-LD",
+            "RDF",
+            "XML-TEI",
+            "VoID",
+            "DCAT",
+            "PROV-O",
+            "SPARQL"
+)
+df.imaging <- data.frame(description = description,
+                         format = format,
+                         stringsAsFactors = F)
+kable(df.imaging,"html",
+      row.names = F,
+      caption = "Base de données") %>%
+  collapse_rows() %>%
+  kable_styling(full_width = FALSE,
+                position = "center",
+                font_size=12)
+```
+
+Pour les besoins de cette page web, les données sont stockées sur GitHub:
+
+<center>[https://github.com/zoometh/LOD](https://github.com/zoometh/LOD)</center>
+
+### Analyses {#wp3.step.anal}
+
+Les analyses se ditribuent généralement entre les différents [axes de recherche](#axes), ou *work packages* (WP)
+
+### Archivage {#wp3.step.archiv}
+
+L'archivage sur le temps long peut se faire sur le [CINES](https://www.huma-num.fr/les-services-par-etapes/#preservation) (v. [Infrastructure Huma-Num](#humanum))
+
+### Publication {#wp3.step.public}
+
+Généralement, les projets scientifiques orientés vers l'ouverture des données prévoient de publier: 
+
+* du code informatique sous la forme de fonctions, de librairies ou de *packages*
+* des jeux de données (*datasets*)
+* des documents de travail (*working papers*) avec du versionnage de DOI
+* des documents de données (*data papers*)
+* des articles scientifiques 
+
+Ces documents et jeux de données peuvent être référencés sur le site web du projet, publiés sur des plateformes en libre accès (e.g. GitLab,  [OpenEdition](https://www.openedition.org/?lang=en)) et associés à des identifiants d'objets numériques (*digital object identifiers*, DOI) prenant en compte leur versionnage (*DOI versioning*) afin de garantir leur [FAIRisation](#openscience).
+
+
+# Infrastructure Huma-Num {#humanum}
+
+L'infrastructure du TGIR [Huma-Num](https://www.huma-num.fr/) -- l'instance française de la *Digital Research Infrastructure for the Arts and Humanities* (DARIAH-EU) -- offre une grille de services facilitant l'inscription des projets de recherche dans le contexte de la Science ouverte:
+
+
+```{r humanum, echo=F}
+humanum.logo.root <- "https://raw.githubusercontent.com/zoometh/golasecca/main/LOD/www/humanum/"
+isidore <- paste0(humanum.logo.root, "isidore.png")
+traiter_ <- paste0(humanum.logo.root, "_traiter.png")
+nakalona <- paste0(humanum.logo.root, "nakalona.png")
+archiver_ <- paste0(humanum.logo.root, "cines.png")
+stocker <- paste0(humanum.logo.root, "sharedocs.png")
+service.fr <- c("Signaler",
+                "Traiter",
+                "Exposer",
+                "Archiver",
+                "Stocker")
+service.url <- c("https://isidore.science/",
+                 "https://www.huma-num.fr/les-services-par-etapes/#traitement",
+                 "https://www.nakalona.fr/",
+                 "https://www.huma-num.fr/les-services-par-etapes/#preservation",
+                 "https://documentation.huma-num.fr/sharedocs-stockage/")
+service <- c(paste0("[",service.fr,"](",service.url,")"))
+service.logo <- c(paste0("![](",isidore," 'ISIDORE'){width=100px}"),
+                  paste0("![](",traiter_," 'R, et autres'){width=100px}"),
+                  paste0("![](",nakalona," 'NAKALONA'){width=100px}"),
+                  paste0("![](",archiver_," 'CINES'){width=100px}"),
+                  paste0("![](",stocker," 'ShareDocs'){width=100px}"))
+df.humanum <- data.frame(service = service,
+                         logo = service.logo,
+                         stringsAsFactors = F)
+kable(df.humanum,"html",
+      row.names = F,
+      caption = "Grille des services de la TGIR Huma-Num") %>%
+  kable_styling(full_width = FALSE,
+                position = "center",
+                font_size=14)
+```
+
+La cohérence de la gestion des données scientifiques du projet peut être assurée par l'utilisation de ces services: développement intégré dans le conteneur d'application logicielles [GitLab](https://gitlab.huma-num.fr), échange des documents de travail (*working papers*, versionnage) sur le [ShareDocs](https://documentation.huma-num.fr/sharedocs-stockage/), référencement des données avec [ISIDORE](https://isidore.science/), etc. 
+
+# References
+
